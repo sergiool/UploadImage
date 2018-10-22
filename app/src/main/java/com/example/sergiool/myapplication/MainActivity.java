@@ -12,6 +12,7 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -26,6 +27,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -106,13 +110,56 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private static final int REQUEST_CAPTURE_IMAGE = 100;
+
+    public void openCameraIntent(View view) {
+        Intent pictureIntent = new Intent(
+                MediaStore.ACTION_IMAGE_CAPTURE);
+        if (pictureIntent.resolveActivity(getPackageManager()) != null) {
+            //Create a file to store the image
+            File photoFile = null;
+            try {
+                photoFile = createImageFile();
+            } catch (IOException ex) {
+                // Error occurred while creating the File
+                Log.d("TAG", ex.getMessage());
+            }
+            if (photoFile != null) {
+                Uri photoURI = FileProvider.getUriForFile(this, "com.example.android.provider", photoFile);
+                pictureIntent.putExtra(MediaStore.EXTRA_OUTPUT,
+                        photoURI);
+                startActivityForResult(pictureIntent,
+                        REQUEST_CAPTURE_IMAGE);
+            }
+        }
+    }
+
+    String imageFilePath;
+    private File createImageFile() throws IOException {
+        String timeStamp =
+                new SimpleDateFormat("yyyyMMdd_HHmmss",
+                        Locale.getDefault()).format(new Date());
+        String imageFileName = "IMG_" + timeStamp + "_";
+        File storageDir =
+                getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+                imageFileName,  /* prefix */
+                ".jpg",         /* suffix */
+                storageDir      /* directory */
+        );
+
+        imageFilePath = image.getAbsolutePath();
+        return image;
+    }
+
+
     public void callIntentImgCam(View view){
-        File file = new File(android.os.Environment.getExternalStorageDirectory(), "img.png");
-        Intent intent = new Intent("android.media.action.IMAGE_CAPTURE");
+/*        FileProvider file = new FileProvider("img.png");
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         intent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(file));
         intent.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
-        getPermissions();
-        startActivityForResult(intent, IMG_CAM);
+        //getPermissions();
+        startActivityForResult(intent, IMG_CAM);*/
     }
 
     public void onClickCAM(View view) {
@@ -122,9 +169,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void onUpload(View view){
-        // Intent intent = new Intent(Intent.ACTION_GET_CONTENT).setType("*/*");
 
-        //startActivityForResult(intent, 123);
         // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file
         // browser.
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -151,6 +196,9 @@ public class MainActivity extends AppCompatActivity {
         // READ_REQUEST_CODE. If the request code seen here doesn't match, it's the
         // response to some other intent, and the code below shouldn't run at all.
         File file = null;
+        if (requestCode == REQUEST_CAPTURE_IMAGE && resultCode == RESULT_OK){
+            file = new File(imageFilePath);
+        }
         if (resultCode == RESULT_OK && resultData != null) {
             if (requestCode == IMG_SDCARD) {
                 // The document selected by the user won't be returned in the intent.
@@ -173,18 +221,20 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     file = new File(mCurrentPhotoPath);
                     //imagem.setImageBitmap(bm1);
-                }catch(Exception fnex){
+                } catch (Exception fnex) {
                     Toast.makeText(getApplicationContext(), "Foto não encontrada!", Toast.LENGTH_LONG).show();
-                }
-                }
-                if (file != null) {
-                try {
-                    upload("http://ufsj.site/upload.php", file);
-                } catch (Exception e) {
-                    Log.d("TAG", e.getMessage());
                 }
             }
         }
+
+        if (file != null) {
+            try {
+                upload("http://ufsj.site/upload.php", file);
+            } catch (Exception e) {
+                Log.d("TAG", e.getMessage());
+            }
+        }
+
     }
 
     private static final int EOF = -1;
@@ -305,7 +355,8 @@ public class MainActivity extends AppCompatActivity {
                 .addFormDataPart("fileToUpload", file.getName(),
                         RequestBody.create(MediaType.parse("text/plain"), file))
                 .build();
-        Request request = new Request.Builder().url(url).post(formBody).build();
+        Request request = new Request.Builder()
+                        .url(url).post(formBody).build();
 
         client.newCall(request).enqueue(new Callback() {
 
